@@ -1,0 +1,7 @@
+{
+  "name": "GeoPulse",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular-standalone"
+}
