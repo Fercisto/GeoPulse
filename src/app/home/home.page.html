@@ -1,21 +1,107 @@
 <ion-header [translucent]="true">
   <ion-toolbar>
-    <ion-title> Blank </ion-title>
+    <ion-title>GeoPulse</ion-title>
+    <ion-buttons slot="end">
+      <ion-toggle [checked]="tracking()" (ionChange)="toggleTracking($event.detail.checked)" labelPlacement="start">
+        En vivo
+      </ion-toggle>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">Blank</ion-title>
-    </ion-toolbar>
-  </ion-header>
+  <!-- Mapa Leaflet -->
+  <div class="map-wrapper">
+    <div #map class="map"></div>
 
-  <div id="container">
-    <strong>Ready to create an app?</strong>
-    <p>
-      Start with Ionic
-      <a target="_blank" rel="noopener noreferrer" href="https://ionicframework.com/docs/components">UI Components</a>
-    </p>
+    <ion-fab vertical="bottom" horizontal="end">
+      <ion-fab-button size="small" (click)="locateMe()" [disabled]="loading()">
+        @if (loading()) {
+        <ion-spinner name="crescent"></ion-spinner>
+        } @else {
+        <ion-icon name="locate"></ion-icon>
+        }
+      </ion-fab-button>
+    </ion-fab>
   </div>
+
+  <!-- Error / permisos rechazados -->
+  @if (error(); as err) {
+  <ion-card color="danger">
+    <ion-card-content>
+      <div class="error">
+        <ion-icon name="alert-circle-outline"></ion-icon>
+        <span>{{ err.message }}</span>
+      </div>
+      <ion-button fill="outline" color="light" size="small" (click)="locateMe()">
+        <ion-icon slot="start" name="refresh-outline"></ion-icon>
+        Reintentar
+      </ion-button>
+    </ion-card-content>
+  </ion-card>
+  }
+
+  <!-- Coordenadas -->
+  <ion-card>
+    <ion-card-content>
+      @if (position(); as pos) {
+      <div class="coords">
+        <div>
+          <small>Latitud</small>
+          <strong>{{ pos.coords.latitude | number: '1.6-6' }}</strong>
+        </div>
+        <div>
+          <small>Longitud</small>
+          <strong>{{ pos.coords.longitude | number: '1.6-6' }}</strong>
+        </div>
+        <div>
+          <small>Precisión</small>
+          <strong>± {{ pos.coords.accuracy | number: '1.0-0' }} m</strong>
+        </div>
+      </div>
+      <ion-button expand="block" size="small" (click)="saveCurrentPlace()">Guardar esta ubicación</ion-button>
+      } @else if (loading()) {
+      <p>Obteniendo ubicación…</p>
+      } @else {
+      <p>Sin ubicación todavía.</p>
+      }
+    </ion-card-content>
+  </ion-card>
+
+  <!-- Funcionalidad basada en ubicación: lugares guardados y distancia -->
+  <ion-list>
+    <ion-list-header>
+      <ion-label>Mis lugares</ion-label>
+    </ion-list-header>
+
+    @for (place of placesWithDistance(); track place.id) {
+    <ion-item-sliding>
+      <ion-item button (click)="focusPlace(place)">
+        <ion-label>
+          <h3>{{ place.name }}</h3>
+          <p>{{ place.lat | number: '1.5-5' }}, {{ place.lng | number: '1.5-5' }}</p>
+        </ion-label>
+        @if (place.distance !== null && place.distance <= 50) {
+        <ion-badge color="success" slot="end">Aquí</ion-badge>
+        } @else {
+        <ion-note slot="end">{{ formatDistance(place.distance) }}</ion-note>
+        }
+      </ion-item>
+      <ion-item-options side="end">
+        <ion-item-option color="danger" (click)="deletePlace(place.id)">
+          <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+        </ion-item-option>
+      </ion-item-options>
+    </ion-item-sliding>
+    } @empty {
+    <ion-item lines="none">
+      <ion-label class="ion-text-wrap">
+        <p>
+          Mantén presionado el mapa o usa "Guardar esta ubicación" para agregar lugares. Te avisaremos al llegar a
+          ellos.
+        </p>
+      </ion-label>
+    </ion-item>
+    }
+  </ion-list>
 </ion-content>

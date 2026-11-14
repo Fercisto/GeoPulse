@@ -1,27 +1,45 @@
-#container {
-  text-align: center;
-
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+.map-wrapper {
+  position: relative;
+  height: 45vh;
 }
 
-#container strong {
-  font-size: 20px;
-  line-height: 26px;
+.map {
+  height: 100%;
+  width: 100%;
 }
 
-#container p {
-  font-size: 16px;
-  line-height: 22px;
+.coords {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
 
-  color: #8c8c8c;
+  small {
+    display: block;
+    color: var(--ion-color-medium);
+  }
 
-  margin: 0;
+  strong {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
-#container a {
-  text-decoration: none;
+.error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+
+  ion-icon {
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+}
+
+// Punto azul del usuario (divIcon fuera del encapsulamiento del componente)
+:host ::ng-deep .user-dot {
+  background: #1e88e5;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(30, 136, 229, 0.4);
 }
