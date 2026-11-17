@@ -1,0 +1,80 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>GeoPulse</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <div class="wrapper">
+    <h1>GeoPulse</h1>
+    <p class="subtitle">Recibe un aviso cada vez que llegues a tus lugares guardados.</p>
+
+    <ion-segment [value]="mode()" (ionChange)="setMode($event.detail.value)">
+      <ion-segment-button value="login">
+        <ion-label>Iniciar sesión</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="register">
+        <ion-label>Crear cuenta</ion-label>
+      </ion-segment-button>
+    </ion-segment>
+
+    <form (ngSubmit)="submit()">
+      @if (mode() === 'register') {
+      <ion-input
+        label="Nombre"
+        labelPlacement="floating"
+        fill="outline"
+        name="name"
+        [(ngModel)]="name"
+        autocomplete="name"
+        required
+      ></ion-input>
+      }
+      <ion-input
+        label="Correo"
+        labelPlacement="floating"
+        fill="outline"
+        type="email"
+        name="email"
+        [(ngModel)]="email"
+        autocomplete="email"
+        required
+      ></ion-input>
+      <ion-input
+        label="Contraseña"
+        labelPlacement="floating"
+        fill="outline"
+        type="password"
+        name="password"
+        [(ngModel)]="password"
+        [autocomplete]="mode() === 'register' ? 'new-password' : 'current-password'"
+        [helperText]="mode() === 'register' ? 'Mínimo 8 caracteres. También será tu contraseña de Gotify.' : ''"
+        required
+      ></ion-input>
+      @if (mode() === 'register') {
+      <ion-input
+        label="Repetir contraseña"
+        labelPlacement="floating"
+        fill="outline"
+        type="password"
+        name="passwordConfirm"
+        [(ngModel)]="passwordConfirm"
+        autocomplete="new-password"
+        required
+      ></ion-input>
+      }
+
+      @if (error(); as err) {
+      <ion-note color="danger">{{ err }}</ion-note>
+      }
+
+      <ion-button expand="block" type="submit" [disabled]="loading()">
+        @if (loading()) {
+        <ion-spinner name="crescent"></ion-spinner>
+        } @else {
+        {{ mode() === 'register' ? 'Crear cuenta' : 'Entrar' }}
+        }
+      </ion-button>
+    </form>
+  </div>
+</ion-content>

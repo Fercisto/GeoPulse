@@ -1,9 +1,0 @@
-import type { CapacitorConfig } from '@capacitor/cli';
-
-const config: CapacitorConfig = {
-  appId: 'com.fercisto.geopulse',
-  appName: 'GeoPulse',
-  webDir: 'www'
-};
-
-export default config;

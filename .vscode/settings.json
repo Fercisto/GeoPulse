@@ -7,5 +7,7 @@
   "typescript.preferences.autoImportFileExcludePatterns": [
     "@ionic/angular/types/ionic-angular-lazy.d.ts",
     "@ionic/angular/types/ionic-angular-common.d.ts"
-  ]
+  ],
+  // El proyecto Angular vive en app/; la extensión de ESLint debe ejecutarse ahí.
+  "eslint.workingDirectories": ["app"]
 }
