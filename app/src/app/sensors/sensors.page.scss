@@ -21,12 +21,14 @@
 .dial {
   position: absolute;
   inset: 0;
+  transform: rotate(var(--dial, 0deg));
   transition: transform 0.1s linear;
 
   span {
     position: absolute;
     font-weight: 700;
-    transform: translate(-50%, -50%);
+    // Gira al revés que el dial para que las letras queden siempre derechas.
+    transform: translate(-50%, -50%) rotate(calc(-1 * var(--dial, 0deg)));
   }
 
   .n {

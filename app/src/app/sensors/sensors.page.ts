@@ -5,6 +5,7 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Motion } from '@capacitor/motion';
 import {
   IonBackButton,
+  IonButton,
   IonButtons,
   IonCard,
   IonCardContent,
@@ -55,6 +56,7 @@ const UI_REFRESH = 100;
     IonTitle,
     IonButtons,
     IonBackButton,
+    IonButton,
     IonContent,
     IonCard,
     IonCardHeader,
@@ -80,6 +82,8 @@ export class SensorsPage {
   readonly rotationRate = signal<{ alpha: number; beta: number; gamma: number } | null>(null);
   readonly eventsPerSecond = signal(0);
   readonly sensorError = signal<string | null>(null);
+  /** true si el navegador exige que el usuario toque un botón para dar permiso a los sensores. */
+  readonly needsPermission = signal(false);
   readonly gpsError = signal<string | null>(null);
 
   /** Rumbo desde mi posición hacia el lugar elegido (grados desde el norte). */
@@ -134,7 +138,8 @@ export class SensorsPage {
   private noSensorTimer?: ReturnType<typeof setTimeout>;
   private motionHandle?: PluginListenerHandle;
   private gpsWatchId?: string;
-  private orientationEvent = 'deviceorientationabsolute';
+  /** Momento (ms) del último evento con referencia absoluta; mientras lleguen, se ignoran los relativos. */
+  private lastAbsoluteAt = 0;
   private readonly orientationHandler = (e: DeviceOrientationEvent): void => this.onOrientation(e);
 
   // ---- Ciclo de vida de Ionic: los sensores solo corren mientras la página está visible ----
@@ -149,7 +154,8 @@ export class SensorsPage {
   async ionViewWillLeave(): Promise<void> {
     clearInterval(this.refreshTimer);
     clearTimeout(this.noSensorTimer);
-    window.removeEventListener(this.orientationEvent, this.orientationHandler as EventListener);
+    window.removeEventListener('deviceorientationabsolute', this.orientationHandler as EventListener);
+    window.removeEventListener('deviceorientation', this.orientationHandler as EventListener);
     await this.motionHandle?.remove();
     if (this.gpsWatchId) {
       await this.location.stopWatch(this.gpsWatchId);
@@ -169,27 +175,40 @@ export class SensorsPage {
 
   // ---- Sensores ----
 
+  /**
+   * Algunos navegadores (Safari en iOS y algunos de escritorio) exigen pedir permiso para los
+   * sensores, y solo lo permiten dentro de un toque del usuario: por eso va en un botón.
+   */
+  async requestSensorPermission(): Promise<void> {
+    try {
+      const results = await Promise.all([
+        requestPermissionOf(DeviceOrientationEvent),
+        requestPermissionOf(DeviceMotionEvent),
+      ]);
+      if (results.every((r) => r === 'granted')) {
+        this.needsPermission.set(false);
+        this.sensorError.set(null);
+        this.watchForMissingSensors();
+      } else {
+        this.sensorError.set(
+          'Permiso de sensores de movimiento denegado. Actívalo en la configuración del sitio del navegador.',
+        );
+      }
+    } catch {
+      this.sensorError.set('El navegador no permitió acceder a los sensores de movimiento.');
+    }
+  }
+
   private async startSensors(): Promise<void> {
     this.sensorError.set(null);
+    this.needsPermission.set(hasPermissionApi(DeviceOrientationEvent) || hasPermissionApi(DeviceMotionEvent));
 
-    // iOS 13+ exige pedir permiso explícito; Android y escritorio no tienen este método.
-    const DOE = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
-    if (typeof DOE.requestPermission === 'function') {
-      try {
-        if ((await DOE.requestPermission()) !== 'granted') {
-          this.sensorError.set('Permiso de sensores de movimiento denegado.');
-          return;
-        }
-      } catch {
-        /* se pide de nuevo al tocar la pantalla */
-      }
-    }
-
-    // Orientación ABSOLUTA (respecto al norte magnético). En Android el evento normal
-    // "deviceorientation" es relativo, por eso @capacitor/motion no sirve como brújula.
-    // iOS no tiene el evento absoluto, pero su "deviceorientation" trae webkitCompassHeading.
-    this.orientationEvent = 'ondeviceorientationabsolute' in window ? 'deviceorientationabsolute' : 'deviceorientation';
-    window.addEventListener(this.orientationEvent, this.orientationHandler as EventListener);
+    // Se escuchan los dos eventos de orientación:
+    // - "deviceorientationabsolute": referido al norte magnético (el que sirve de brújula en Android).
+    // - "deviceorientation": en Android es relativo; en iOS trae webkitCompassHeading. Se usa como
+    //   respaldo si el absoluto no llega (teléfono sin magnetómetro o simulador de DevTools).
+    window.addEventListener('deviceorientationabsolute', this.orientationHandler as EventListener);
+    window.addEventListener('deviceorientation', this.orientationHandler as EventListener);
 
     // Acelerómetro y giroscopio con @capacitor/motion (evento "devicemotion")
     this.motionHandle = await Motion.addListener('accel', (e) => {
@@ -199,7 +218,13 @@ export class SensorsPage {
       this.latest.rotationRate = e.rotationRate;
     });
 
-    // Si en 3 s no llegó ningún dato, el dispositivo no tiene esos sensores (ej. una PC).
+    // Si hace falta permiso, los eventos llegarán después de tocar "Permitir sensores".
+    if (!this.needsPermission()) this.watchForMissingSensors();
+  }
+
+  /** Si en 3 s no llegó ningún dato, el dispositivo no tiene esos sensores (ej. una PC). */
+  private watchForMissingSensors(): void {
+    clearTimeout(this.noSensorTimer);
     this.noSensorTimer = setTimeout(() => {
       if (!this.latest.orientation && !this.latest.accel) {
         this.sensorError.set(
@@ -211,10 +236,17 @@ export class SensorsPage {
 
   private onOrientation(e: DeviceOrientationEvent): void {
     if (e.alpha === null) return;
-    this.eventCount++;
-    this.latest.orientation = { alpha: e.alpha, beta: e.beta ?? 0, gamma: e.gamma ?? 0, absolute: e.absolute };
-
     const ios = (e as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
+    const isAbsolute = e.absolute || ios !== undefined;
+    const now = performance.now();
+    if (isAbsolute) {
+      this.lastAbsoluteAt = now;
+    } else if (now - this.lastAbsoluteAt < 1000) {
+      return; // ya hay datos absolutos recientes: el relativo no aporta
+    }
+    this.eventCount++;
+    this.latest.orientation = { alpha: e.alpha, beta: e.beta ?? 0, gamma: e.gamma ?? 0, absolute: isAbsolute };
+
     const raw = ios ?? headingFromAlpha(e.alpha, screen.orientation?.angle ?? 0);
     this.latest.heading = this.smoother.next(raw);
   }
@@ -226,7 +258,10 @@ export class SensorsPage {
     if (accel) this.accel.set(accel);
     if (accelGravity) this.accelGravity.set(accelGravity);
     if (rotationRate) this.rotationRate.set(rotationRate);
-    if (orientation || accel) this.sensorError.set(null);
+    if (orientation || accel) {
+      this.sensorError.set(null);
+      this.needsPermission.set(false); // ya llegan datos: el botón de permiso sobra
+    }
 
     if (heading !== undefined) {
       this.heading.set(heading);
@@ -279,6 +314,18 @@ export class SensorsPage {
       this.gpsError.set((e as Error).message);
     }
   }
+}
+
+type PermissionCapable = { requestPermission?: () => Promise<string> };
+
+function hasPermissionApi(eventClass: unknown): boolean {
+  return typeof (eventClass as PermissionCapable)?.requestPermission === 'function';
+}
+
+/** Pide permiso si el navegador lo exige; si no tiene ese método, el acceso ya está concedido. */
+async function requestPermissionOf(eventClass: unknown): Promise<string> {
+  const api = eventClass as PermissionCapable;
+  return typeof api?.requestPermission === 'function' ? api.requestPermission() : 'granted';
 }
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
