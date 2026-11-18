@@ -5,6 +5,9 @@
       <ion-toggle [checked]="tracking()" (ionChange)="onTrackingToggle($event)" labelPlacement="start">
         En vivo
       </ion-toggle>
+      <ion-button (click)="openCompass()" aria-label="Brújula y sensores">
+        <ion-icon slot="icon-only" name="compass-outline"></ion-icon>
+      </ion-button>
       <ion-button (click)="logout()" aria-label="Cerrar sesión">
         <ion-icon slot="icon-only" name="log-out-outline"></ion-icon>
       </ion-button>
@@ -117,12 +120,8 @@
       </div>
       <ol>
         <li>Instala la app <b>Gotify</b> (Play Store o F-Droid).</li>
-        <li>
-          Servidor: <code>{{ gotifyUrl }}</code>
-        </li>
-        <li>
-          Usuario: <code>{{ user?.email }}</code> y tu contraseña de GeoPulse.
-        </li>
+        <li>Servidor: <code>{{ gotifyUrl }}</code></li>
+        <li>Usuario: <code>{{ user?.email }}</code> y tu contraseña de GeoPulse.</li>
         <li>Activa <b>En vivo</b> aquí arriba.</li>
       </ol>
     </ion-card-content>

@@ -1,6 +1,7 @@
 import { DecimalPipe } from '@angular/common';
 import type { ElementRef } from '@angular/core';
 import { Component, computed, inject, NgZone, signal, viewChild } from '@angular/core';
+import { Haptics } from '@capacitor/haptics';
 import type { ToggleCustomEvent } from '@ionic/angular';
 import {
   AlertController,
@@ -32,6 +33,7 @@ import {
 import { addIcons } from 'ionicons';
 import {
   alertCircleOutline,
+  compassOutline,
   locate,
   logOutOutline,
   notificationsOutline,
@@ -133,7 +135,15 @@ export class HomePage {
   private pendingReport?: TrackedPosition;
 
   constructor() {
-    addIcons({ locate, refreshOutline, trashOutline, alertCircleOutline, logOutOutline, notificationsOutline });
+    addIcons({
+      locate,
+      refreshOutline,
+      trashOutline,
+      alertCircleOutline,
+      logOutOutline,
+      notificationsOutline,
+      compassOutline,
+    });
   }
 
   // ---- Ciclo de vida de Ionic ----
@@ -217,6 +227,10 @@ export class HomePage {
     this.placeMarkers.get(place.id)?.openPopup();
   }
 
+  openCompass(): void {
+    this.nav.navigateForward('/sensors');
+  }
+
   async logout(): Promise<void> {
     await this.stopTracking();
     this.api.logout();
@@ -269,6 +283,8 @@ export class HomePage {
     try {
       const { arrived } = await this.api.reportLocation(pos.lat, pos.lng, pos.accuracy);
       for (const place of arrived) this.toast(`Llegaste a "${place.name}"`, 'success');
+      // Vibración (actuador físico) al llegar: aviso aunque no estés viendo la pantalla.
+      if (arrived.length) Haptics.vibrate({ duration: 600 }).catch(() => undefined);
     } catch {
       // Sin conexión momentánea: se reintentará con la siguiente ubicación.
     } finally {

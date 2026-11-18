@@ -1,0 +1,157 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/home"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Brújula</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  @if (sensorError(); as err) {
+  <ion-note color="danger" class="block">{{ err }}</ion-note>
+  } @if (gpsError(); as err) {
+  <ion-note color="danger" class="block">{{ err }}</ion-note>
+  }
+
+  <!-- Lugar destino -->
+  @if (places().length) {
+  <ion-select
+    label="Ir hacia"
+    labelPlacement="floating"
+    fill="outline"
+    interface="action-sheet"
+    [value]="target()?.id"
+    (ionChange)="selectTarget($event.detail.value)"
+  >
+    @for (p of places(); track p.id) {
+    <ion-select-option [value]="p.id">{{ p.name }}</ion-select-option>
+    }
+  </ion-select>
+  } @else {
+  <ion-note class="block">Guarda un lugar en la pantalla principal para que la flecha te guíe hacia él.</ion-note>
+  }
+
+  <!-- Brújula -->
+  <div class="compass" [class.on-target]="onTarget()">
+    <div class="dial" [style.transform]="'rotate(' + dialRotation() + 'deg)'">
+      <span class="n">N</span>
+      <span class="e">E</span>
+      <span class="s">S</span>
+      <span class="w">O</span>
+    </div>
+    @if (turn() !== null) {
+    <div class="arrow" [style.transform]="'rotate(' + arrowRotation() + 'deg)'"></div>
+    }
+    <div class="center"></div>
+  </div>
+
+  <div class="summary">
+    @if (turn(); as t) {
+    <p class="hint">
+      @if (onTarget()) {
+      <strong>Vas en la dirección correcta</strong>
+      } @else { Gira {{ (t > 0 ? t : -t) | number: '1.0-0' }}° a la {{ t > 0 ? 'derecha' : 'izquierda' }} }
+    </p>
+    } @else if (onTarget()) {
+    <p class="hint"><strong>Vas en la dirección correcta</strong></p>
+    }
+    <div class="stats">
+      <div>
+        <small>Distancia</small>
+        <strong>{{ formatDistance(distance()) }}</strong>
+      </div>
+      <div>
+        <small>Tu orientación</small>
+        <strong>
+          @if (heading() !== null) { {{ heading()! | number: '1.0-0' }}° {{ cardinal(heading()!) }} } @else { — }
+        </strong>
+      </div>
+      <div>
+        <small>Rumbo al lugar</small>
+        <strong>
+          @if (targetBearing() !== null) { {{ targetBearing()! | number: '1.0-0' }}° {{ cardinal(targetBearing()!) }} }
+          @else { — }
+        </strong>
+      </div>
+    </div>
+    <p class="tip">Sostén el teléfono horizontal, con la pantalla hacia arriba, como una brújula.</p>
+  </div>
+
+  <!-- Datos crudos de los sensores -->
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>Orientación</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      @if (orientation(); as o) {
+      <div class="grid">
+        <div><small>alpha (Z)</small><strong>{{ o.alpha | number: '1.1-1' }}°</strong></div>
+        <div><small>beta (X)</small><strong>{{ o.beta | number: '1.1-1' }}°</strong></div>
+        <div><small>gamma (Y)</small><strong>{{ o.gamma | number: '1.1-1' }}°</strong></div>
+      </div>
+      <p class="source">Referencia: {{ o.absolute ? 'absoluta (norte magnético)' : 'relativa (sin brújula)' }}</p>
+      } @else {
+      <p>Esperando datos…</p>
+      }
+    </ion-card-content>
+  </ion-card>
+
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>Acelerómetro y giroscopio</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      @if (accelGravity(); as g) {
+      <p class="label">Con gravedad (m/s²)</p>
+      <div class="grid">
+        <div><small>x</small><strong>{{ g.x | number: '1.2-2' }}</strong></div>
+        <div><small>y</small><strong>{{ g.y | number: '1.2-2' }}</strong></div>
+        <div><small>z</small><strong>{{ g.z | number: '1.2-2' }}</strong></div>
+      </div>
+      } @if (accel(); as a) {
+      <p class="label">Sin gravedad (m/s²) · magnitud {{ accelMagnitude() | number: '1.2-2' }}</p>
+      <div class="grid">
+        <div><small>x</small><strong>{{ a.x | number: '1.2-2' }}</strong></div>
+        <div><small>y</small><strong>{{ a.y | number: '1.2-2' }}</strong></div>
+        <div><small>z</small><strong>{{ a.z | number: '1.2-2' }}</strong></div>
+      </div>
+      } @if (rotationRate(); as r) {
+      <p class="label">Velocidad de giro (°/s)</p>
+      <div class="grid">
+        <div><small>alpha</small><strong>{{ r.alpha | number: '1.1-1' }}</strong></div>
+        <div><small>beta</small><strong>{{ r.beta | number: '1.1-1' }}</strong></div>
+        <div><small>gamma</small><strong>{{ r.gamma | number: '1.1-1' }}</strong></div>
+      </div>
+      } @if (!accelGravity()) {
+      <p>Esperando datos…</p>
+      }
+      <p class="source">{{ eventsPerSecond() }} eventos de sensores por segundo</p>
+    </ion-card-content>
+  </ion-card>
+
+  <!-- Explicación -->
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>¿Qué significan estos datos?</ion-card-title>
+    </ion-card-header>
+    <ion-card-content class="explain">
+      <p>
+        <b>alpha</b>: giro sobre el eje Z (perpendicular a la pantalla), de 0° a 360°. Con referencia absoluta, 0° es el
+        norte magnético y crece en sentido antihorario; por eso tu orientación es 360° − alpha.
+      </p>
+      <p><b>beta</b>: inclinación hacia adelante o atrás (eje X), de −180° a 180°. Plano = 0°.</p>
+      <p><b>gamma</b>: inclinación a la izquierda o derecha (eje Y), de −90° a 90°. Plano = 0°.</p>
+      <p>
+        <b>Aceleración con gravedad</b>: en reposo y boca arriba, z ≈ 9.8 m/s² (la gravedad). Sirve para saber cómo está
+        inclinado el teléfono.
+      </p>
+      <p><b>Aceleración sin gravedad</b>: solo el movimiento que tú le das. Quieto ≈ 0; al caminar o agitar sube.</p>
+      <p><b>Velocidad de giro</b>: del giroscopio, cuántos grados por segundo está rotando el teléfono.</p>
+      <p>
+        <b>La flecha</b> apunta al lugar: se calcula el rumbo con tu GPS y el del lugar, y se le resta hacia dónde mira
+        el teléfono. Al quedar de frente (±15°) el teléfono vibra.
+      </p>
+    </ion-card-content>
+  </ion-card>
+</ion-content>

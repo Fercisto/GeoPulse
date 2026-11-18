@@ -24,6 +24,11 @@ export const routes: Routes = [
     loadComponent: () => import('./home/home.page').then((m) => m.HomePage),
   },
   {
+    path: 'sensors',
+    canActivate: [requireLogin],
+    loadComponent: () => import('./sensors/sensors.page').then((m) => m.SensorsPage),
+  },
+  {
     path: '',
     redirectTo: 'home',
     pathMatch: 'full',
