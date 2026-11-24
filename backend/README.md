@@ -49,6 +49,7 @@ Todas las rutas excepto `/auth/*` requieren `Authorization: Bearer <token>`.
 | DELETE | `/places/{id}` | — | Borra un lugar propio |
 | POST | `/location` | `{lat, lng, accuracy?}` | Reporta la ubicación; si entras al radio de un lugar, envía la notificación |
 | GET | `/arrivals` | — | Últimas 50 llegadas |
+| POST | `/checkin` | `{place_id}` | Check-in (regla R2): solo si tu última ubicación, de los últimos 10 min, está dentro del lugar; avisa por Gotify |
 
 ## Cómo se evitan avisos repetidos
 Cada lugar guarda `inside` (si la última ubicación estaba dentro del radio). Solo se

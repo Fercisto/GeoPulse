@@ -42,6 +42,7 @@ try {
         $method === 'DELETE' && (bool) preg_match('#^/places/(\d+)$#', $path, $m) => $places->delete((int) $m[1]),
         $method === 'POST' && $path === '/location' => $location->report(),
         $method === 'GET' && $path === '/arrivals' => $location->arrivals(),
+        $method === 'POST' && $path === '/checkin' => $location->checkIn(),
         default => throw new HttpError(404, "Ruta no encontrada: $method $path"),
     };
 } catch (HttpError $e) {

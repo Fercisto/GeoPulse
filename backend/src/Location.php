@@ -72,6 +72,46 @@ final class Location
         Http::json($stmt->fetchAll());
     }
 
+    /**
+     * POST /checkin { place_id }
+     *
+     * Regla R2 (también validada en el servidor): solo se permite el check-in si la última
+     * ubicación reportada en los últimos 10 minutos está dentro del radio del lugar.
+     */
+    public function checkIn(): never
+    {
+        $userId = $this->auth->userId();
+        $placeId = (int) Http::requireFloat(Http::body(), 'place_id', 1, PHP_INT_MAX);
+
+        $stmt = $this->db->prepare(
+            'SELECT p.name, p.lat, p.lng, p.radius, u.last_lat, u.last_lng, u.last_seen_at, u.gotify_app_token
+             FROM places p JOIN users u ON u.id = p.user_id
+             WHERE p.id = ? AND p.user_id = ?'
+        );
+        $stmt->execute([$placeId, $userId]);
+        $row = $stmt->fetch();
+        if (!$row) {
+            throw new HttpError(404, 'Lugar no encontrado.');
+        }
+
+        $recent = $row['last_seen_at'] !== null && strtotime($row['last_seen_at']) >= time() - 600;
+        $inside = $recent && $row['last_lat'] !== null && self::distance(
+            (float) $row['last_lat'],
+            (float) $row['last_lng'],
+            (float) $row['lat'],
+            (float) $row['lng'],
+        ) <= $row['radius'] + self::EXIT_MARGIN;
+        if (!$inside) {
+            throw new HttpError(403, 'Para hacer check-in debes estar dentro del lugar.');
+        }
+
+        if (!$row['gotify_app_token']) {
+            throw new HttpError(409, 'Tu cuenta no tiene notificaciones configuradas.');
+        }
+        $this->gotify->send($row['gotify_app_token'], 'GeoPulse', "Check-in en \"{$row['name']}\"");
+        Http::json(['ok' => true, 'place' => $row['name']]);
+    }
+
     private function setInside(int $placeId, bool $inside): void
     {
         $this->db->prepare('UPDATE places SET inside = ? WHERE id = ?')->execute([(int) $inside, $placeId]);

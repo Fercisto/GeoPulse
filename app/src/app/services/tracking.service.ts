@@ -28,6 +28,8 @@ export class TrackingService {
   private readonly location = inject(LocationService);
   private readonly isNative = Capacitor.isNativePlatform();
   private watcherId?: string;
+  private currentFilter = 10;
+  private callbacks?: { onPosition: (p: TrackedPosition) => void; onError: (e: LocationError) => void };
 
   get active(): boolean {
     return this.watcherId !== undefined;
@@ -42,8 +44,19 @@ export class TrackingService {
     }
   }
 
-  async start(onPosition: (p: TrackedPosition) => void, onError: (e: LocationError) => void): Promise<void> {
+  /** Metros entre lecturas con los que corre el seguimiento actual. */
+  get distanceFilter(): number {
+    return this.currentFilter;
+  }
+
+  async start(
+    onPosition: (p: TrackedPosition) => void,
+    onError: (e: LocationError) => void,
+    distanceFilter = 10,
+  ): Promise<void> {
     if (this.active) return;
+    this.callbacks = { onPosition, onError };
+    this.currentFilter = distanceFilter;
 
     if (this.isNative) {
       await this.requestNotificationPermission();
@@ -53,7 +66,7 @@ export class TrackingService {
           backgroundMessage: 'Te avisaremos al llegar a tus lugares guardados.',
           requestPermissions: true,
           stale: false,
-          distanceFilter: 10, // metros entre lecturas
+          distanceFilter, // metros entre lecturas (regla R3 lo sube a 50 con batería baja)
         },
         (loc, err) => {
           if (err) {
@@ -74,6 +87,17 @@ export class TrackingService {
       );
     }
     this.remember(true);
+  }
+
+  /**
+   * Cambia la distancia entre lecturas sin que el usuario apague el seguimiento.
+   * El plugin no permite modificar un watcher, así que se quita y se vuelve a crear.
+   */
+  async setDistanceFilter(meters: number): Promise<void> {
+    if (!this.active || !this.callbacks || meters === this.currentFilter) return;
+    const { onPosition, onError } = this.callbacks;
+    await this.stop();
+    await this.start(onPosition, onError, meters);
   }
 
   async stop(): Promise<void> {

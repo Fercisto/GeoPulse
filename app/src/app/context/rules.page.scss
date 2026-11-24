@@ -1,0 +1,39 @@
+.block {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.vars {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+
+  small {
+    display: block;
+    color: var(--ion-color-medium);
+  }
+}
+
+ion-item.active {
+  --background: rgba(var(--ion-color-success-rgb), 0.12);
+}
+
+.effects {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.label {
+  margin: 14px 0 6px;
+  font-weight: 600;
+}
+
+.reset {
+  margin-top: 16px;
+}
+
+.hint {
+  margin-top: 10px;
+  color: var(--ion-color-medium);
+  font-size: 0.85em;
+}

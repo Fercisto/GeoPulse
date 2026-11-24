@@ -8,6 +8,9 @@
       <ion-button (click)="openCompass()" aria-label="Brújula y sensores">
         <ion-icon slot="icon-only" name="compass-outline"></ion-icon>
       </ion-button>
+      <ion-button (click)="openRules()" aria-label="Reglas de contexto">
+        <ion-icon slot="icon-only" name="options-outline"></ion-icon>
+      </ion-button>
       <ion-button (click)="logout()" aria-label="Cerrar sesión">
         <ion-icon slot="icon-only" name="log-out-outline"></ion-icon>
       </ion-button>
@@ -30,6 +33,40 @@
       </ion-fab-button>
     </ion-fab>
   </div>
+
+  <!-- R1: sin conexión -->
+  @if (decision().offlineMode) {
+  <ion-card color="warning">
+    <ion-card-content>
+      <strong>Sin conexión.</strong> No se pueden guardar ni borrar lugares. Tus ubicaciones se guardan en el teléfono
+      ({{ queuedCount() }} en cola) y se enviarán al volver internet.
+    </ion-card-content>
+  </ion-card>
+  }
+
+  <!-- R2: check-in dentro de una zona con internet -->
+  @if (decision().checkInEnabled && context().zone; as zone) {
+  <ion-card color="success">
+    <ion-card-content>
+      <div class="checkin">
+        <span>Estás en <b>{{ zone.name }}</b></span>
+        <ion-button color="light" size="small" (click)="checkIn(zone.id)" [disabled]="checkingIn()">
+          Hacer check-in
+        </ion-button>
+      </div>
+    </ion-card-content>
+  </ion-card>
+  }
+
+  <!-- R3: ahorro de batería -->
+  @if (decision().powerSaving) {
+  <ion-card color="medium">
+    <ion-card-content>
+      <strong>Ahorro de batería.</strong> Batería baja: la ubicación se lee cada {{ decision().trackingDistanceFilter }}
+      m.
+    </ion-card-content>
+  </ion-card>
+  }
 
   <!-- Error / permisos rechazados -->
   @if (error(); as err) {
@@ -65,7 +102,9 @@
           <strong>± {{ pos.accuracy | number: '1.0-0' }} m</strong>
         </div>
       </div>
-      <ion-button expand="block" size="small" (click)="saveCurrentPlace()">Guardar esta ubicación</ion-button>
+      <ion-button expand="block" size="small" (click)="saveCurrentPlace()" [disabled]="decision().offlineMode">
+        Guardar esta ubicación
+      </ion-button>
       } @else if (loading()) {
       <p>Obteniendo ubicación…</p>
       } @else {
@@ -97,7 +136,7 @@
         }
       </ion-item>
       <ion-item-options side="end">
-        <ion-item-option color="danger" (click)="deletePlace(place.id)">
+        <ion-item-option color="danger" (click)="deletePlace(place.id)" [disabled]="decision().offlineMode">
           <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
         </ion-item-option>
       </ion-item-options>

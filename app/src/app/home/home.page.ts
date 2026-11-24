@@ -1,6 +1,6 @@
 import { DecimalPipe } from '@angular/common';
 import type { ElementRef } from '@angular/core';
-import { Component, computed, inject, NgZone, signal, viewChild } from '@angular/core';
+import { Component, computed, effect, inject, NgZone, signal, untracked, viewChild } from '@angular/core';
 import { Haptics } from '@capacitor/haptics';
 import type { ToggleCustomEvent } from '@ionic/angular';
 import {
@@ -37,12 +37,14 @@ import {
   locate,
   logOutOutline,
   notificationsOutline,
+  optionsOutline,
   refreshOutline,
   trashOutline,
 } from 'ionicons/icons';
 import * as L from 'leaflet';
 
 import { environment } from '../../environments/environment';
+import { ContextService } from '../context/context.service';
 import type { Place } from '../services/api.service';
 import { ApiService } from '../services/api.service';
 import type { LocationError } from '../services/location.service';
@@ -97,6 +99,13 @@ export class HomePage {
   private readonly nav = inject(NavController);
   private readonly toastCtrl = inject(ToastController);
   private readonly alertCtrl = inject(AlertController);
+  private readonly ctx = inject(ContextService);
+
+  /** Contexto actual y decisión del motor de reglas. */
+  readonly context = this.ctx.context;
+  readonly decision = this.ctx.decision;
+  readonly queuedCount = signal(this.api.queuedLocations);
+  readonly checkingIn = signal(false);
 
   private readonly mapEl = viewChild.required<ElementRef<HTMLDivElement>>('map');
 
@@ -143,6 +152,28 @@ export class HomePage {
       logOutOutline,
       notificationsOutline,
       compassOutline,
+      optionsOutline,
+    });
+
+    // Variable "zona": el contexto necesita la posición y los lugares actuales.
+    effect(() => this.ctx.setPlaces(this.places()));
+    effect(() => {
+      const pos = this.position();
+      if (pos) this.ctx.setPosition(pos.lat, pos.lng);
+    });
+
+    // R3: si cambia la distancia entre lecturas, se reinicia el seguimiento con la nueva.
+    effect(() => {
+      const meters = this.decision().trackingDistanceFilter;
+      untracked(() => this.tracker.setDistanceFilter(meters));
+    });
+
+    // R1: al pasar de "sin conexión" a "con conexión", se envía la cola de ubicaciones.
+    let wasOffline = false;
+    effect(() => {
+      const offline = this.decision().offlineMode;
+      if (wasOffline && !offline) untracked(() => this.flushQueue());
+      wasOffline = offline;
     });
   }
 
@@ -150,6 +181,7 @@ export class HomePage {
 
   ionViewDidEnter(): void {
     if (!this.map) {
+      this.ctx.start();
       this.initMap();
       this.loadPlaces();
       this.locateMe();
@@ -188,6 +220,10 @@ export class HomePage {
   }
 
   async savePlaceAt(lat: number, lng: number): Promise<void> {
+    if (this.decision().offlineMode) {
+      this.toast('Sin conexión: no se pueden guardar lugares ahora.', 'danger');
+      return;
+    }
     const alert = await this.alertCtrl.create({
       header: 'Guardar lugar',
       message: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
@@ -227,6 +263,24 @@ export class HomePage {
     this.placeMarkers.get(place.id)?.openPopup();
   }
 
+  openRules(): void {
+    this.nav.navigateForward('/rules');
+  }
+
+  /** R2: solo se muestra el botón cuando estás dentro de una zona y hay internet. */
+  async checkIn(placeId: number): Promise<void> {
+    this.checkingIn.set(true);
+    try {
+      const { place } = await this.api.checkIn(placeId);
+      this.toast(`Check-in en "${place}" enviado`, 'success');
+      Haptics.vibrate({ duration: 300 }).catch(() => undefined);
+    } catch (e) {
+      this.toast((e as Error).message, 'danger');
+    } finally {
+      this.checkingIn.set(false);
+    }
+  }
+
   openCompass(): void {
     this.nav.navigateForward('/sensors');
   }
@@ -255,6 +309,7 @@ export class HomePage {
             this.report(pos);
           }),
         (err) => this.zone.run(() => this.handleError(err)),
+        this.decision().trackingDistanceFilter,
       );
       this.tracking.set(true);
       return true;
@@ -275,6 +330,12 @@ export class HomePage {
    * la notificación push por Gotify (llega aunque la app esté cerrada).
    */
   private async report(pos: TrackedPosition): Promise<void> {
+    // R1: sin conexión no se intenta enviar; se guarda en la cola local.
+    if (this.decision().offlineMode) {
+      this.api.queueLocation(pos.lat, pos.lng, pos.accuracy);
+      this.queuedCount.set(this.api.queuedLocations);
+      return;
+    }
     if (this.reporting) {
       this.pendingReport = pos; // solo nos importa la más reciente
       return;
@@ -292,6 +353,20 @@ export class HomePage {
       const next = this.pendingReport;
       this.pendingReport = undefined;
       if (next) this.report(next);
+    }
+  }
+
+  /** R1: al volver la conexión, envía las ubicaciones que se guardaron sin internet. */
+  private async flushQueue(): Promise<void> {
+    if (!this.api.queuedLocations) return;
+    try {
+      const arrived = await this.api.flushQueue();
+      this.toast('Conexión recuperada: ubicaciones pendientes enviadas', 'success');
+      for (const place of arrived) this.toast(`Llegaste a "${place.name}"`, 'success');
+    } catch {
+      // Si vuelve a fallar, lo que falte se queda en la cola.
+    } finally {
+      this.queuedCount.set(this.api.queuedLocations);
     }
   }
 

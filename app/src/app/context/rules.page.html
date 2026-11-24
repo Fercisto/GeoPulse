@@ -1,0 +1,116 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/home"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Reglas de contexto</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  @if (ctx.simulating()) {
+  <ion-note color="warning" class="block">Modo simulación: algunos valores no son los reales del dispositivo.</ion-note>
+  }
+
+  <!-- Variables de contexto -->
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>Variables de contexto</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <div class="vars">
+        <div>
+          <small>Zona</small>
+          <strong>{{ context().zone?.name ?? 'Fuera de zona' }}</strong>
+        </div>
+        <div>
+          <small>Conexión</small>
+          <strong>{{ connectionLabel() }}</strong>
+        </div>
+        <div>
+          <small>Batería</small>
+          <strong>
+            @if (context().batteryLevel !== null) { {{ context().batteryLevel! * 100 | number: '1.0-0' }} % } @else {
+            Desconocida }
+          </strong>
+          <small>{{ context().charging ? 'Cargando' : 'Sin cargar' }}</small>
+        </div>
+      </div>
+    </ion-card-content>
+  </ion-card>
+
+  <!-- Reglas -->
+  <ion-list>
+    @for (rule of rules; track rule.id) {
+    <ion-item [class.active]="isActive(rule.id)">
+      <ion-label class="ion-text-wrap">
+        <h2>{{ rule.id }}. {{ rule.name }}</h2>
+        <p><b>Si:</b> {{ rule.condition }}</p>
+        <p><b>Entonces:</b> {{ rule.action }}</p>
+      </ion-label>
+      <ion-badge slot="end" [color]="isActive(rule.id) ? 'success' : 'medium'">
+        {{ isActive(rule.id) ? 'Activa' : 'Inactiva' }}
+      </ion-badge>
+    </ion-item>
+    }
+  </ion-list>
+
+  <!-- Efecto actual -->
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>Comportamiento actual</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <ul class="effects">
+        <li>Guardar y borrar lugares: <b>{{ decision().offlineMode ? 'desactivado' : 'activado' }}</b></li>
+        <li>Botón de check-in: <b>{{ decision().checkInEnabled ? 'habilitado' : 'deshabilitado' }}</b></li>
+        <li>Lectura de ubicación cada <b>{{ decision().trackingDistanceFilter }} m</b></li>
+        <li>Ubicaciones en cola sin enviar: <b>{{ queued() }}</b></li>
+      </ul>
+    </ion-card-content>
+  </ion-card>
+
+  <!-- Simulación -->
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>Simular escenario</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <p class="label">Dentro de una zona</p>
+      <ion-segment [value]="choiceOf('inZone')" (ionChange)="setChoice('inZone', $event.detail.value)">
+        <ion-segment-button value="real">Real</ion-segment-button>
+        <ion-segment-button value="yes">Sí</ion-segment-button>
+        <ion-segment-button value="no">No</ion-segment-button>
+      </ion-segment>
+
+      <p class="label">Conexión a internet</p>
+      <ion-segment [value]="choiceOf('online')" (ionChange)="setChoice('online', $event.detail.value)">
+        <ion-segment-button value="real">Real</ion-segment-button>
+        <ion-segment-button value="yes">Sí</ion-segment-button>
+        <ion-segment-button value="no">No</ion-segment-button>
+      </ion-segment>
+
+      <p class="label">Batería baja (15 %)</p>
+      <ion-segment [value]="choiceOf('batteryLevel')" (ionChange)="setChoice('batteryLevel', $event.detail.value)">
+        <ion-segment-button value="real">Real</ion-segment-button>
+        <ion-segment-button value="yes">Sí</ion-segment-button>
+        <ion-segment-button value="no">No</ion-segment-button>
+      </ion-segment>
+
+      <p class="label">Cargando</p>
+      <ion-segment [value]="choiceOf('charging')" (ionChange)="setChoice('charging', $event.detail.value)">
+        <ion-segment-button value="real">Real</ion-segment-button>
+        <ion-segment-button value="yes">Sí</ion-segment-button>
+        <ion-segment-button value="no">No</ion-segment-button>
+      </ion-segment>
+
+      <ion-button expand="block" fill="outline" class="reset" (click)="ctx.clearOverrides()">
+        Usar valores reales
+      </ion-button>
+      <p class="hint">
+        La simulación de "sin conexión" solo cambia las reglas de la app; para probar la cola real, apaga el Wi-Fi y los
+        datos del teléfono.
+      </p>
+    </ion-card-content>
+  </ion-card>
+</ion-content>

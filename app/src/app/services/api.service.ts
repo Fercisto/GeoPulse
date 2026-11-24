@@ -35,6 +35,14 @@ export class ApiError extends Error {
 }
 
 const SESSION_KEY = 'geopulse.session';
+const QUEUE_KEY = 'geopulse.locationQueue';
+const QUEUE_MAX = 50;
+
+interface QueuedLocation {
+  lat: number;
+  lng: number;
+  accuracy: number;
+}
 
 /**
  * Cliente de la API PHP. Guarda la sesión (JWT) en localStorage.
@@ -92,6 +100,53 @@ export class ApiService {
   /** Reporta la ubicación; el servidor decide si llegaste a un lugar y envía la notificación. */
   reportLocation(lat: number, lng: number, accuracy: number): Promise<LocationReport> {
     return this.request<LocationReport>('POST', '/location', { lat, lng, accuracy });
+  }
+
+  /** Regla R2: avisa por Gotify que hiciste check-in (el servidor valida que estés dentro). */
+  checkIn(placeId: number): Promise<{ ok: boolean; place: string }> {
+    return this.request('POST', '/checkin', { place_id: placeId });
+  }
+
+  // ---- Cola sin conexión (regla R1) ----
+
+  /** Guarda una ubicación para enviarla cuando vuelva internet. Conserva las últimas 50. */
+  queueLocation(lat: number, lng: number, accuracy: number): void {
+    const queue = [...this.readQueue(), { lat, lng, accuracy }].slice(-QUEUE_MAX);
+    this.writeQueue(queue);
+  }
+
+  get queuedLocations(): number {
+    return this.readQueue().length;
+  }
+
+  /** Envía en orden las ubicaciones encoladas. Devuelve las llegadas que detectó el servidor. */
+  async flushQueue(): Promise<LocationReport['arrived']> {
+    const arrived: LocationReport['arrived'] = [];
+    let queue = this.readQueue();
+    while (queue.length) {
+      const { lat, lng, accuracy } = queue[0];
+      const report = await this.reportLocation(lat, lng, accuracy); // si falla, el resto queda en la cola
+      arrived.push(...report.arrived);
+      queue = queue.slice(1);
+      this.writeQueue(queue);
+    }
+    return arrived;
+  }
+
+  private readQueue(): QueuedLocation[] {
+    try {
+      return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? '[]') as QueuedLocation[];
+    } catch {
+      return [];
+    }
+  }
+
+  private writeQueue(queue: QueuedLocation[]): void {
+    try {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    } catch {
+      /* almacenamiento no disponible */
+    }
   }
 
   // ---- Interno ----
